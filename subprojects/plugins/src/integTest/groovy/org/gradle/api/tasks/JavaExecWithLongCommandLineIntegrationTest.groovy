@@ -63,7 +63,8 @@ class JavaExecWithLongCommandLineIntegrationTest extends AbstractIntegrationSpec
 
     @ToBeFixedForInstantExecution
     def "still fail when classpath doesn't shorten the command line enough"() {
-        def veryLongCommandLineArgs = getLongArgs()
+        // Generate a long enough command-line that will definitely not be shortened
+        def veryLongCommandLineArgs = getLongArgs(10)
         buildFile << """
             extraClasspath.from('${veryLongFileNames.join("','")}')
 
@@ -156,11 +157,11 @@ class JavaExecWithLongCommandLineIntegrationTest extends AbstractIntegrationSpec
         outputContains("Shortening Java classpath")
     }
 
-    private static List<String> getLongArgs() {
+    private static List<String> getLongArgs(int exceed=1) {
         final int maxIndividualArgLength = 65530
 
 
-        int maxCommandLength = getMaxArgs()
+        int maxCommandLength = getMaxArgs()*exceed
         List<String> result = new ArrayList<>()
         while (maxCommandLength > 0) {
             result.add('a' * maxIndividualArgLength)
@@ -174,13 +175,10 @@ class JavaExecWithLongCommandLineIntegrationTest extends AbstractIntegrationSpec
         switch(OperatingSystem.current()) {
             case OperatingSystem.WINDOWS:
                 return LongCommandLineDetectionUtil.MAX_COMMAND_LINE_LENGTH_WINDOWS
-                break
             case OperatingSystem.MAC_OS:
                 return LongCommandLineDetectionUtil.MAX_COMMAND_LINE_LENGTH_OSX
-                break
             default:
                 return LongCommandLineDetectionUtil.MAX_COMMAND_LINE_LENGTH_NIX
-                break
         }
     }
 }

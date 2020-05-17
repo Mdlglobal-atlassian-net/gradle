@@ -39,6 +39,10 @@ external val instantExecutionProblems: () -> JsModel
 
 
 private
+external val instantExecutionDocs: () -> String
+
+
+private
 typealias JsModel = Array<JsProblem>
 
 
@@ -117,7 +121,8 @@ fun reportPageModelFromJsModel(jsProblems: JsModel): InstantExecutionReportPage.
         taskTree = treeModelFor(
             ProblemNode.Label("Problems grouped by task"),
             problemNodesByTask(problems)
-        )
+        ),
+        docsLink = instantExecutionDocs()
     )
 }
 

@@ -84,7 +84,8 @@ object InstantExecutionReportPage : Component<InstantExecutionReportPage.Model, 
         val totalProblems: Int,
         val messageTree: ProblemTreeModel,
         val taskTree: ProblemTreeModel,
-        val displayFilter: DisplayFilter = DisplayFilter.All
+        val displayFilter: DisplayFilter = DisplayFilter.All,
+        val docsLink: String
     )
 
     enum class DisplayFilter {
@@ -132,7 +133,7 @@ object InstantExecutionReportPage : Component<InstantExecutionReportPage.Model, 
             div(
                 attributes { className("left") },
                 h1("${model.totalProblems} instant execution problems were found"),
-                learnMore(),
+                learnMore(model.docsLink),
                 viewTree(model.messageTree, Intent::MessageTreeIntent, model.displayFilter),
                 viewTree(model.taskTree, Intent::TaskTreeIntent, model.displayFilter)
             )
@@ -152,10 +153,10 @@ object InstantExecutionReportPage : Component<InstantExecutionReportPage.Model, 
     )
 
     private
-    fun learnMore(): View<Intent> = div(
+    fun learnMore(url: String): View<Intent> = div(
         span("Learn more about "),
         a(
-            attributes { href("https://gradle.github.io/instant-execution/") },
+            attributes { href(url) },
             "Gradle Instant Execution"
         ),
         span(".")

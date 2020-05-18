@@ -59,6 +59,7 @@ import testLibrary
 import java.util.concurrent.Callable
 import java.util.jar.Attributes
 import org.gradle.testing.PerformanceTest
+import ext
 
 
 /**
@@ -275,6 +276,7 @@ class UnitTestAndCompilePlugin : Plugin<Project> {
 
             useJUnitPlatform()
             configureJvmForTest()
+            configureGitInfo()
             addOsAsInputs()
 
             if (this !is PerformanceTest) {
@@ -291,6 +293,15 @@ class UnitTestAndCompilePlugin : Plugin<Project> {
                 }
             }
         }
+    }
+
+    /**
+     * Some tests depends on repository's git information.
+     */
+    private
+    fun Test.configureGitInfo() {
+        systemProperty("gradleBuildBranch", project.ext["gradleBuildBranch"]!!)
+        systemProperty("gradleBuildCommitId", project.ext["gradleBuildCommitId"]!!)
     }
 
     private

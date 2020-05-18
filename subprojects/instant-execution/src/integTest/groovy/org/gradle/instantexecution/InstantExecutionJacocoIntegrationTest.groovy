@@ -56,10 +56,10 @@ class InstantExecutionJacocoIntegrationTest extends AbstractInstantExecutionInte
         instantRun 'test', 'jacocoTestReport'
 
         then:
-        instantExecution.assertStateStored()
+        instantExecution.assertStateLoaded()
         problems.assertResultHasProblems(result) {
-            withTotalProblemsCount(expectedStoreProblemCount)
-            withUniqueProblems(expectedStoreProblems)
+            withTotalProblemsCount(expectedLoadProblemCount)
+            withUniqueProblems(expectedLoadProblems)
         }
         htmlReportDir.assertIsDir()
 

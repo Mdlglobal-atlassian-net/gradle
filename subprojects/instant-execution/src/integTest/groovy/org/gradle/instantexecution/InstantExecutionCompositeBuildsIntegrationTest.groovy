@@ -42,9 +42,9 @@ class InstantExecutionCompositeBuildsIntegrationTest extends AbstractInstantExec
         instantRun("help")
 
         then:
-        instantExecution.assertStateStored()
+        instantExecution.assertStateLoaded()
         problems.assertResultHasProblems(result) {
-            withUniqueProblems(expectedProblem)
+            // TODO - should inform the user that composite builds do not work
         }
 
         when:
@@ -52,5 +52,8 @@ class InstantExecutionCompositeBuildsIntegrationTest extends AbstractInstantExec
 
         then:
         instantExecution.assertStateLoaded()
+        problems.assertResultHasProblems(result) {
+            // TODO - should inform the user that composite builds do not work
+        }
     }
 }

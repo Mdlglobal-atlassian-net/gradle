@@ -426,12 +426,12 @@ class InstantExecutionProblemReportingIntegrationTest extends AbstractInstantExe
         failure.assertHasFailures(1)
 
         when:
-        instantRun 'all', "-D${SystemProperties.maxProblems}=2000"
+        instantFails 'all', "-D${SystemProperties.maxProblems}=2000"
 
         then:
         executed(':problems', ':moreProblems', ':all')
         instantExecution.assertStateLoaded()
-        problems.assertResultHasProblems(result) {
+        problems.assertFailureHasProblems(failure) {
             withProblem("task `:moreProblems` of type `BrokenTask`: invocation of 'Task.project' at execution time is unsupported.")
             withProblem("field 'broken' from type 'BrokenTask': cannot deserialize object of type 'org.gradle.api.Project' as these are not supported with instant execution.")
             withProblem("task `:problems` of type `BrokenTask`: invocation of 'Task.project' at execution time is unsupported.")

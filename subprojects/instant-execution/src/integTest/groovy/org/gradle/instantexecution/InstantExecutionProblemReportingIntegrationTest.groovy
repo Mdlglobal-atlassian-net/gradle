@@ -307,57 +307,136 @@ class InstantExecutionProblemReportingIntegrationTest extends AbstractInstantExe
     }
 
     def "problems are reported and fail the build when failOnProblems is false but maxProblems is reached"() {
-
         given:
-        def stateSerializationProblems = withStateSerializationProblems().store
-        def taskExecutionProblems = withTaskExecutionProblems()
+        def instantExecution = newInstantExecutionFixture()
 
-        when:
-        instantFails 'taskWithStateSerializationProblems', 'a', 'b',
-            "-D${SystemProperties.failOnProblems}=false", "-D${SystemProperties.maxProblems}=2"
-
-        then:
-        notExecuted(':taskWithStateSerializationProblems', ':a', ':b')
-        problems.assertFailureHasTooManyProblems(failure) {
-            withUniqueProblems(stateSerializationProblems)
-            withProblemsWithStackTraceCount(0)
-        }
-
-        when:
-        instantFails 'taskWithStateSerializationProblems', 'a', 'b',
-            "-D${SystemProperties.failOnProblems}=false", "-D${SystemProperties.maxProblems}=4"
-
-        then:
-        executed(':taskWithStateSerializationProblems', ':a', ':b')
-        problems.assertFailureHasTooManyProblems(failure) {
-            withRootCauseDescription("Execution failed for task ':b'.")
-            withUniqueProblems(taskExecutionProblems + stateSerializationProblems)
-            withProblemsWithStackTraceCount(2)
-        }
-    }
-
-    def "problems not causing build failure are reported"() {
-
-        given:
-        settingsFile << "rootProject.name = 'test'"
-        def expectedProblems = withStateSerializationProblems().store
         buildFile << """
-            taskWithStateSerializationProblems.doFirst { throw new Exception("BOOM") }
+            class BrokenTask extends DefaultTask {
+                @Internal
+                final broken = project
+
+                @TaskAction
+                def go() {
+                    try {
+                        println("project = " + project)
+                    } catch(Exception e) {
+                        // should not happen, problems are collected
+                        throw new RuntimeException("broken")
+                    }
+                }
+            }
+
+            task problems(type: BrokenTask)
+            task moreProblems(type: BrokenTask)
+
+            task all {
+                dependsOn('problems', 'moreProblems')
+            }
         """
 
         when:
-        problems.withDoNotFailOnProblems()
-        instantFails 'taskWithStateSerializationProblems'
+        instantFails 'all', "-D${SystemProperties.failOnProblems}=false", "-D${SystemProperties.maxProblems}=2"
 
         then:
-        problems.assertResultHasProblems(result) {
-            withUniqueProblems(expectedProblems)
-            withProblemsWithStackTraceCount(0)
+        executed(':problems', ':moreProblems', ':all')
+        instantExecution.assertStateStored() // does not fail
+        problems.assertFailureHasTooManyProblems(failure) {
+            withProblem("task `:moreProblems` of type `BrokenTask`: invocation of 'Task.project' at execution time is unsupported.")
+            withProblem("field 'broken' from type 'BrokenTask': cannot serialize object of type 'org.gradle.api.internal.project.DefaultProject', a subtype of 'org.gradle.api.Project', as these are not supported with instant execution.")
+            withProblem("task `:problems` of type `BrokenTask`: invocation of 'Task.project' at execution time is unsupported.")
+            totalProblemsCount = 4
         }
 
-        and:
-        failure.assertHasDescription("Execution failed for task ':taskWithStateSerializationProblems'.")
-        failure.assertHasCause("java.lang.Exception: BOOM")
+        when:
+        instantFails 'all', "-D${SystemProperties.failOnProblems}=false", "-D${SystemProperties.maxProblems}=3"
+
+        then:
+        executed(':problems', ':moreProblems', ':all')
+        instantExecution.assertStateLoaded()
+        problems.assertFailureHasTooManyProblems(failure) {
+            withProblem("task `:moreProblems` of type `BrokenTask`: invocation of 'Task.project' at execution time is unsupported.")
+            withProblem("field 'broken' from type 'BrokenTask': cannot deserialize object of type 'org.gradle.api.Project' as these are not supported with instant execution.")
+            withProblem("task `:problems` of type `BrokenTask`: invocation of 'Task.project' at execution time is unsupported.")
+            totalProblemsCount = 4
+        }
+        failure.assertHasFailures(1)
+
+        when:
+        instantRun 'all', "-D${SystemProperties.failOnProblems}=false", "-D${SystemProperties.maxProblems}=4"
+
+        then:
+        executed(':problems', ':moreProblems', ':all')
+        instantExecution.assertStateLoaded()
+        problems.assertResultHasProblems(result) {
+            withProblem("task `:moreProblems` of type `BrokenTask`: invocation of 'Task.project' at execution time is unsupported.")
+            withProblem("field 'broken' from type 'BrokenTask': cannot deserialize object of type 'org.gradle.api.Project' as these are not supported with instant execution.")
+            withProblem("task `:problems` of type `BrokenTask`: invocation of 'Task.project' at execution time is unsupported.")
+            totalProblemsCount = 4
+        }
+    }
+
+    def "fails regardless of maxProblems when failOnProblems is true"() {
+        given:
+        def instantExecution = newInstantExecutionFixture()
+
+        buildFile << """
+            class BrokenTask extends DefaultTask {
+                @Internal
+                final broken = project
+
+                @TaskAction
+                def go() {
+                    println("project = " + project)
+                }
+            }
+
+            task problems(type: BrokenTask)
+            task moreProblems(type: BrokenTask)
+
+            task all {
+                dependsOn('problems', 'moreProblems')
+            }
+        """
+
+        when:
+        instantFails 'all', "-D${SystemProperties.maxProblems}=2"
+
+        then:
+        executed(':problems', ':moreProblems', ':all')
+        instantExecution.assertStateStored() // does not fail
+        problems.assertFailureHasProblems(failure) {
+            withProblem("task `:moreProblems` of type `BrokenTask`: invocation of 'Task.project' at execution time is unsupported.")
+            withProblem("field 'broken' from type 'BrokenTask': cannot serialize object of type 'org.gradle.api.internal.project.DefaultProject', a subtype of 'org.gradle.api.Project', as these are not supported with instant execution.")
+            withProblem("task `:problems` of type `BrokenTask`: invocation of 'Task.project' at execution time is unsupported.")
+            totalProblemsCount = 4
+        }
+
+        when:
+        instantFails 'all', "-D${SystemProperties.maxProblems}=2"
+
+        then:
+        executed(':problems', ':moreProblems', ':all')
+        instantExecution.assertStateLoaded()
+        problems.assertFailureHasProblems(failure) {
+            withProblem("task `:moreProblems` of type `BrokenTask`: invocation of 'Task.project' at execution time is unsupported.")
+            withProblem("field 'broken' from type 'BrokenTask': cannot deserialize object of type 'org.gradle.api.Project' as these are not supported with instant execution.")
+            withProblem("task `:problems` of type `BrokenTask`: invocation of 'Task.project' at execution time is unsupported.")
+            totalProblemsCount = 4
+        }
+        failure.assertHasFailures(1)
+
+        when:
+        instantRun 'all', "-D${SystemProperties.maxProblems}=2000"
+
+        then:
+        executed(':problems', ':moreProblems', ':all')
+        instantExecution.assertStateLoaded()
+        problems.assertResultHasProblems(result) {
+            withProblem("task `:moreProblems` of type `BrokenTask`: invocation of 'Task.project' at execution time is unsupported.")
+            withProblem("field 'broken' from type 'BrokenTask': cannot deserialize object of type 'org.gradle.api.Project' as these are not supported with instant execution.")
+            withProblem("task `:problems` of type `BrokenTask`: invocation of 'Task.project' at execution time is unsupported.")
+            totalProblemsCount = 4
+        }
     }
 
     def "report does not include configuration and runtime problems from buildSrc"() {
@@ -621,13 +700,11 @@ class InstantExecutionProblemReportingIntegrationTest extends AbstractInstantExe
         instantFails "foo", "-D${SystemProperties.maxProblems}=$maxProblems"
 
         then:
-        def expectedProblems = (1..expectedNumberOfProblems).collect {
-            "field 'p$it' from type 'Bean': cannot serialize object of type '${DefaultProject.name}', a subtype of '${Project.name}', as these are not supported with instant execution."
-        }
         problems.assertFailureHasTooManyProblems(failure) {
-            withTotalProblemsCount(expectedNumberOfProblems)
-            withUniqueProblems(expectedProblems)
-            withProblemsWithStackTraceCount(0)
+            withTotalProblemsCount(3)
+            withProblem("field 'p1' from type 'Bean': cannot serialize object of type '${DefaultProject.name}', a subtype of '${Project.name}', as these are not supported with instant execution.")
+            withProblem("field 'p2' from type 'Bean': cannot serialize object of type '${DefaultProject.name}', a subtype of '${Project.name}', as these are not supported with instant execution.")
+            withProblem("field 'p3' from type 'Bean': cannot serialize object of type '${DefaultProject.name}', a subtype of '${Project.name}', as these are not supported with instant execution.")
         }
 
         where:

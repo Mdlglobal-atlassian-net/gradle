@@ -79,17 +79,9 @@ public abstract class AbstractAuthenticationSupportedRepository extends Abstract
         delegate.credentials(credentialsType, action);
     }
 
-    public void credentials(Provider<? extends Credentials> credentials) {
-        invalidateDescriptor();
-        delegate.credentials(credentials);
-    }
-
     public Provider<Credentials> credentials(Class<? extends Credentials> credentialsType) {
         invalidateDescriptor();
-        delegate.credentials(new DefaultProvider<>(() -> {
-            delegate.setIdentity(getName());
-            return delegate.credentials(credentialsType).get();
-        }));
+        delegate.credentials(new DefaultProvider<>(() -> delegate.credentials(credentialsType, getName()).get()));
         return delegate.getConfiguredCredentials();
     }
 
